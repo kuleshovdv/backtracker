@@ -6,7 +6,7 @@ Created on 10 мая 2017 г.
 @author: info@lineris.ru
 '''
 
-import os, time, sys
+import os, time, sys, platform, ctypes
 from datetime import datetime
 from telegram.ext import Updater         
 from telegram.ext import CommandHandler
@@ -18,6 +18,7 @@ from signal import SIGTERM
 HandleMessage = "Сканирование папок резервного копирования на сервере %s в папке %s завершено %s.\r\n"
 NoNewFiles = "Новых файлов в сканируемых папках не обнаружено."
 NewFiles = "Обнаружено %s новых файлов в сканируемых папках:\r\n"
+AvailableSpace = "\r\nСвободное дисковое пространство %s мегабайт."
 BadToken = '''В конфигурационном файле указан некорректный токен.
 Создайте своего Telegram бота и укажите правильный token в конфигурационном файле.
 Подробности https://core.telegram.org/bots
@@ -29,6 +30,15 @@ tChatIDdone = "Конфигурация успешно сохранена. За�
 tChatID = '''Ваш ChatID: %s зарегистрирован и автоматически записан в конфигурационный файл.
 Дождитесь завершения выполнения утилиты и запустите ее повторно для сканирования папок.
 ''' 
+
+def FreeSpace(FilePath):
+    if platform.system() == 'Windows':
+        free_bytes = ctypes.c_ulonglong(0)
+        ctypes.windll.kernel32.GetDiskFreeSpaceExW(ctypes.c_wchar_p(FilePath), None, None, ctypes.pointer(FilePath))
+        return free_bytes.value/1024/1024
+    else:
+        return os.statvfs(FilePath).f_bavail*os.statvfs(FilePath).f_bsize/1024/1024
+    
 
 def BuildFilesList(FilesList, FilePath, FileAge):
     for i in  os.listdir(FilePath):
@@ -53,6 +63,7 @@ def Scan(settings, updater):
                 tMessage = tMessage + i +"\r\n" 
     else:
         tMessage = tMessage + NoNewFiles
+    tMessage = tMessage + AvailableSpace % FreeSpace(settings.get('Scan', 'Path'))
     updater.bot.sendMessage(chat_id=settings.get('Telegram', 'ChatID'), text=tMessage)
 
 
@@ -64,8 +75,13 @@ def start(bot, update):
 
             
 if __name__ == '__main__':
+    if len(sys.argv) > 1:
+        ParamFileName = sys.argv[1]
+    else: 
+        ParamFileName = "backtracker.conf"
+    
     settings = ConfigParser.ConfigParser()
-    settings.read('backtracker.conf')
+    settings.read(ParamFileName)
     
     try:
         updater = Updater(settings.get('Telegram', 'Token'))
@@ -79,11 +95,9 @@ if __name__ == '__main__':
         print tChatIDinit
         start_handler = CommandHandler('start', start)
         updater.dispatcher.add_handler(start_handler)
-        #os.kill(os.getpid(), SIGTERM) 
         updater.start_polling()
         updater.idle()
-        #settings.write('backtracker.conf')
-        with open('backtracker.conf', 'wb') as configfile:
+        with open(ParamFileName, 'wb') as configfile:
             settings.write(configfile)
         print tChatIDdone
         updater.stop()  
