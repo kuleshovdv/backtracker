@@ -55,7 +55,7 @@ def Scan(settings, updater):
     BuildFilesList(FilesList, settings.get('Scan', 'Path'), settings.getint('Scan', 'Hours')*60*60)
     tMessage = HandleMessage  % (os.uname()[1],settings.get('Scan', 'Path'),datetime.today())
     if len(FilesList):
-        if bool(settings.getboolean('Telegram', 'FailOnly')):
+        if settings.getboolean('Telegram', 'FailOnly'):
             return
         else:
             tMessage = tMessage + NewFiles % len(FilesList)  
