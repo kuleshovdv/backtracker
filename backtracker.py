@@ -15,10 +15,12 @@ import ConfigParser
 from signal import SIGTERM
 
 
+fsDevider = 1024*1024
+fsText = "Мбайт"
 HandleMessage = "Сканирование папок резервного копирования на сервере %s в папке %s завершено %s.\r\n"
 NoNewFiles = "Новых файлов в сканируемых папках не обнаружено."
 NewFiles = "Обнаружено %s новых файлов в сканируемых папках:\r\n"
-AvailableSpace = "\r\nСвободное дисковое пространство %s мегабайт."
+AvailableSpace = "\r\nСвободное дисковое пространство %s %s."
 BadToken = '''В конфигурационном файле указан некорректный токен.
 Создайте своего Telegram бота и укажите правильный token в конфигурационном файле.
 Подробности https://core.telegram.org/bots
@@ -37,7 +39,7 @@ def FreeSpace(FilePath):
         ctypes.windll.kernel32.GetDiskFreeSpaceExW(ctypes.c_wchar_p(FilePath), None, None, ctypes.pointer(FilePath))
         return free_bytes.value/1024/1024
     else:
-        return os.statvfs(FilePath).f_bavail*os.statvfs(FilePath).f_bsize/1024/1024
+        return os.statvfs(FilePath).f_bavail*os.statvfs(FilePath).f_bsize/fsDevider
     
 
 def BuildFilesList(FilesList, FilePath, FileAge):
@@ -53,17 +55,18 @@ def BuildFilesList(FilesList, FilePath, FileAge):
 def Scan(settings, updater):
     FilesList = []
     BuildFilesList(FilesList, settings.get('Scan', 'Path'), settings.getint('Scan', 'Hours')*60*60)
-    tMessage = HandleMessage  % (os.uname()[1],settings.get('Scan', 'Path'),datetime.today())
+    tMessage = HandleMessage  % (os.uname()[1],settings.get('Scan', 'Path'),datetime.strftime(datetime.now(), "%Y.%m.%d %H:%M:%S"))  
     if len(FilesList):
         if settings.getboolean('Telegram', 'FailOnly'):
             return
         else:
             tMessage = tMessage + NewFiles % len(FilesList)  
             for i in FilesList:
-                tMessage = tMessage + i +"\r\n" 
+                #tMessage = tMessage + i + "\r\n"
+                tMessage = tMessage + "%s (%s %s)" % (i, os.path.getsize(i)/fsDevider, fsText) 
     else:
         tMessage = tMessage + NoNewFiles
-    tMessage = tMessage + AvailableSpace % FreeSpace(settings.get('Scan', 'Path'))
+    tMessage = tMessage + AvailableSpace % (FreeSpace(settings.get('Scan', 'Path')), fsText)
     updater.bot.sendMessage(chat_id=settings.get('Telegram', 'ChatID'), text=tMessage)
 
 
